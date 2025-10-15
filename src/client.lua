@@ -340,28 +340,20 @@ CreateThread(function()
                 text(isElectric and "⛽ (E)" or "⛽", barLeftX, fuelY - 0.008, 0.30, 4)
             end
 
-            -- engine health
+            -- engine health - show small symbol with % of damage (badness)
             if config.enableEngineHUD then
                 local rawHealth = GetVehicleEngineHealth(vehicle) or 0.0 -- 0 to 1000
-                local engPct = clamp(rawHealth / 1000.0, 0.0, 1.0)
-                displayedEngine = lerp(displayedEngine, engPct * 100.0, 0.10)
-                local currentEngPct = clamp(displayedEngine / 100.0, 0.0, 1.0)
+                local engPct = clamp(rawHealth / 1000.0, 0.0, 1.0)        -- 1.0 = perfect, 0.0 = blown
+                local badPct = math.floor((1.0 - engPct) * 100.0 + 0.5)   -- 0 = good, 100 = worst
 
-                -- background
-                DrawRect(baseX, engY, barW, barH + 0.006, 40, 40, 40, 150)
+                -- choose text color by severity of damage
+                local colorPrefix = "~g~"                                -- green when <= 20% bad
+                if badPct > 20 and badPct <= 50 then colorPrefix = "~y~" end -- yellow
+                if badPct > 50 and badPct <= 75 then colorPrefix = "~o~" end -- orange
+                if badPct > 75 then colorPrefix = "~r~" end                 -- red
 
-                -- color by health
-                local r, g, b = 47, 179, 77 -- green
-                if currentEngPct <= 0.80 and currentEngPct > 0.50 then r, g, b = 171, 171, 35 end -- yellowish
-                if currentEngPct <= 0.50 and currentEngPct > 0.25 then r, g, b = 226, 125, 37 end -- orange
-                if currentEngPct <= 0.25 then r, g, b = 200, 40, 40 end -- red
-
-                -- fill
-                local leftEdge = baseX - (barW / 2)
-                local fillW = barW * currentEngPct
-                local fillX = leftEdge + (fillW / 2)
-                DrawRect(fillX, engY, fillW, barH, r, g, b, 220)
-                text("⚙", barLeftX, engY - 0.008, 0.30, 4)
+                -- display compact gear icon with percent badness
+                text(colorPrefix .. "⚙ " .. tostring(badPct) .. "%~w~", barLeftX, engY - 0.008, 0.30, 4)
             end
         end
     end
