@@ -17,6 +17,9 @@ local hidden = false
 local cash = ""
 local bank = ""
 local postals = {}
+local displayedSpeed = 0.0
+local displayedFuel = 100.0
+local displayedEngine = 100.0
 
 if config.enableSpeedometerMetric then
     speedCalc = 3.6
@@ -71,6 +74,18 @@ function getTime()
         minute = "0" .. minute
     end
     return hour .. ":" .. minute
+end
+
+
+-- basic helpers for UI smoothing and clamping
+function lerp(a, b, t)
+    return a + (b - a) * t
+end
+
+function clamp(value, min, max)
+    if value < min then return min end
+    if value > max then return max end
+    return value
 end
 
 
@@ -280,19 +295,73 @@ CreateThread(function()
             text("~c~| ~s~" .. compass .. " ~c~| ~s~" .. streetName, 0.168, 0.932, 0.55, 4)
         end
         if vehicle ~= 0 and vehClass ~= 13 and driver then
-            DrawRect(0.139, 0.947, 0.035, 0.03, 0, 0, 0, 100)
-            text(tostring(math.ceil(GetEntitySpeed(vehicle) * speedCalc)), 0.124, 0.931, 0.5, 4)
-            text(speedText, 0.14, 0.94, 0.3, 4)
+            -- modern cluster (bottom-right)
+            local baseX = 0.90
+            local baseY = 0.915
+            local bgW  = 0.176
+            local bgH  = 0.108
+            DrawRect(baseX, baseY, bgW, bgH, 0, 0, 0, 120)
+
+            -- speed (smoothed)
+            local targetSpeed = GetEntitySpeed(vehicle) * speedCalc
+            displayedSpeed = lerp(displayedSpeed, targetSpeed, 0.15)
+            local speedValue = math.floor(displayedSpeed + 0.5)
+            text(tostring(speedValue), baseX - 0.070, baseY - 0.020, 0.7, 4)
+            text(speedText,           baseX + 0.005, baseY - 0.004, 0.35, 4)
+
+            -- bars baseline
+            local barLeftX = baseX - (bgW / 2) + 0.014
+            local fuelY    = baseY + 0.022
+            local engY     = baseY + 0.047
+            local barW     = bgW - 0.028
+            local barH     = 0.010
+
+            -- fuel
             if config.enableFuelHUD then
-                local fuelLevel = (0.141 * GetVehicleFuelLevel(vehicle)) / 100 -- Fuel Value x Max Bar Width Show The Level Range Within The Bar
-                DrawRect(0.0855, 0.8, 0.141, 0.010 + 0.006, 40, 40, 40, 150)  -- Bar Background (Black)
-                if config.electricVehiles[GetEntityModel(vehicle)] then
-                    DrawRect(0.0855, 0.8, 0.141, 0.010, 20, 140, 255, 100)  -- Bar Background (lighter blue)
-                    DrawRect(0.0855 - (0.141 - fuelLevel) / 2, 0.8, fuelLevel, 0.010, 20, 140, 255, 255)  -- Current Fuel (Blue)
-                else
-                    DrawRect(0.0855, 0.8, 0.141, 0.010, 206, 145, 40, 100)  -- Bar Background (lighter yellow)
-                    DrawRect(0.0855 - (0.141 - fuelLevel) / 2, 0.8, fuelLevel, 0.010, 206, 145, 0, 255)  -- Current Fuel (Yellow)
-                end
+                local rawFuel = GetVehicleFuelLevel(vehicle) or 0.0
+                local fuelPct = clamp((rawFuel / 100.0), 0.0, 1.0)
+                displayedFuel = lerp(displayedFuel, fuelPct * 100.0, 0.10)
+                local currentFuelPct = clamp(displayedFuel / 100.0, 0.0, 1.0)
+
+                -- background
+                DrawRect(baseX, fuelY, barW, barH + 0.006, 40, 40, 40, 150)
+
+                -- choose color
+                local isElectric = config.electricVehiles[GetEntityModel(vehicle)] ~= nil
+                local r, g, b = 206, 145, 40
+                if isElectric then r, g, b = 20, 140, 255 end
+                if currentFuelPct <= 0.15 then r, g, b = 200, 40, 40 end
+
+                -- fill from left
+                local leftEdge = baseX - (barW / 2)
+                local fillW = barW * currentFuelPct
+                local fillX = leftEdge + (fillW / 2)
+                DrawRect(fillX, fuelY, fillW, barH, r, g, b, 220)
+                text(isElectric and "⛽ (E)" or "⛽", barLeftX, fuelY - 0.008, 0.30, 4)
+            end
+
+            -- engine health
+            if config.enableEngineHUD then
+                local rawHealth = GetVehicleEngineHealth(vehicle) or 0.0 -- 0 to 1000
+                local engPct = clamp(rawHealth / 1000.0, 0.0, 1.0)
+                displayedEngine = lerp(displayedEngine, engPct * 100.0, 0.10)
+                local currentEngPct = clamp(displayedEngine / 100.0, 0.0, 1.0)
+
+                -- background
+                DrawRect(baseX, engY, barW, barH + 0.006, 40, 40, 40, 150)
+
+                -- color by health
+                local r, g, b = 47, 179, 77 -- green
+                if currentEngPct <= 0.80 and currentEngPct > 0.50 then r, g, b = 171, 171, 35 end -- yellowish
+                if currentEngPct <= 0.50 and currentEngPct > 0.25 then r, g, b = 226, 125, 37 end -- orange
+                if currentEngPct <= 0.25 then r, g, b = 200, 40, 40 end -- red
+
+                -- fill
+                local leftEdge = baseX - (barW / 2)
+                local fillW = barW * currentEngPct
+                local fillX = leftEdge + (fillW / 2)
+                DrawRect(fillX, engY, fillW, barH, r, g, b, 220)
+                text("⚙", barLeftX, engY - 0.008, 0.30, 4)
             end
         end
     end

@@ -3,6 +3,7 @@
 config = {
     enableMoneyHud = true, -- curerntly only used with ND Framework if you use another fw then you can edit the client.lua, or if you're using the Currency_System then turn this off.
     enableFuelHUD = true,
+    enableEngineHUD = true,
     enableSpeedometerMetric = false,
     enablePostals = true, -- paste your postal into postals.json file.
 
